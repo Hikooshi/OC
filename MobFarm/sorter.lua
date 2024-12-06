@@ -126,7 +126,7 @@ local function searchSide(item)
     return false
   end
   
-  if (settings.iwl and whiteList[fname]) or (settings.mwl and whiteList[modName]) then
+  if (settings.iwl and whitelist[label:lower()]) or (settings.mwl and whitelit[modName]) then
     return sides.wls
   end
   
@@ -144,7 +144,7 @@ local function searchSide(item)
     end
   end
   
-  if (settings.ibl and blItems[fname]) or (settings.mbl and blMods[modName]) then
+  if (settings.ibl and blacklist[fname]) or (settings.mbl and blacklist[modName]) then
     return sides.del
   end
   
