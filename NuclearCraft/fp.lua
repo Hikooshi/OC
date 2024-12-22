@@ -14,7 +14,7 @@ local partsInvSize
 local craftSlots = {1, 2, 3, 5, 6, 7, 9, 10, 11}
 local resultSlot = 13
 
-local fuels = setmetatable({},
+local fuels = setmetatable({n=0},
   {__call = function(self, str, ctg)
               local words = {}
               for word in str:gmatch("%S+") do
@@ -35,18 +35,23 @@ local fuels = setmetatable({},
                 d2 = d2 - 1
                 oxides[e2 .. d2] = c2
               end
-              local tbl = {}
-              tbl[e1 .. d1] = c1
-              tbl[e2 .. d2] = c2
+              local tbl = {elements={}}
+              tbl.elements[e1 .. d1] = c1
+              tbl.elements[e2 .. d2] = c2
               tbl.oxides = oxides
               tbl.category = ctg and ctg or words[2]
+              tbl.n = self.n
+              self.n = self.n + 1
               self[words[1]] = tbl
             end})
 
-local selectedFuels = {elements = {}}
+local selectedFuels = {}
+local selectedElements = {}
 
 fuels("TBU thorium 4 9 4 9")
 fuels("OxTBU thorium 4 9 4 9")
+fuels("MOX-239 plutonium 5 1 8 8 uranium", "MOX")
+fuels("MOX-241 plutonium 9 1 8 8 uranium", "MOX")
 fuels("LEU-233 uranium 0 1 8 8")
 fuels("OxLEU-233 uranium 1 1 8 8")
 fuels("HEU-233 uranium 0 4 8 5")
@@ -67,8 +72,6 @@ fuels("LEP-241 plutonium 8 1 12 8")
 fuels("OxLEP-241 plutonium 9 1 12 8")
 fuels("HEP-241 plutonium 8 4 12 5")
 fuels("OxHEP-241 plutonium 9 4 12 5")
-fuels("MOX-239 plutonium 5 1 8 8 uranium", "MOX")
-fuels("MOX-241 plutonium 9 1 8 8 uranium", "MOX")
 fuels("LEA-242 americium 4 1 8 8")
 fuels("OxLEA-242 americium 5 1 8 8")
 fuels("HEA-242 americium 4 4 8 5")
@@ -99,75 +102,73 @@ fuels("HECf-251 californium 8 4 12 5")
 fuels("OxHECf-251 californium 9 4 12 5")
 
 local buttons = setmetatable({},
-  {__call = function(self, str)
-              local count = #self
-              local _, q = math.modf(count / 4)
+  {__call = function(self, str, n, func)
+              local _, q = math.modf(n / 4)
               q = q / 25 * 100
               local tbl = {}
               tbl.text = str
               tbl.x = 10 + (14 * q)
-              tbl.y = 4 + math.floor(count / 4)
---os.sleep(0.8)
---print(tbl.y, str)
+              tbl.y = 4 + math.floor(n / 4)
               tbl.width = 12
               tbl.height = 1
-              self[count + 1] = tbl
+              tbl.foreground = 0xFFFFFF
+              tbl.background = 0x000000
+              tbl.func = func
+              table.insert(self, tbl)
             end})
 buttons.exit = {x = 78, y = 1, width = 3, height = 1, text = "X", foreground = 0xFF0000, background = 0x444444}
 buttons.start = {x = 35, y = 19, width = 7, height = 3, text = "Start", foreground = 0x444444, background = 0xFFFF00}
 
-buttons("TBU")
-buttons("OxTBU")
-buttons("MOX-239")
-buttons("MOX-241")
-buttons("LEU-233")
-buttons("OxLEU-233")
-buttons("HEU-233")
-buttons("OxHEU-233")
-buttons("LEU-235")
-buttons("OxLEU-235")
-buttons("HEU-235")
-buttons("OxHEU-235")
-buttons("LEN-236")
-buttons("OxLEN-236")
-buttons("HEN-236")
-buttons("OxHEN-236")
-buttons("LEP-239")
-buttons("OxLEP-239")
-buttons("HEP-239")
-buttons("OxHEP-239")
-buttons("LEP-241")
-buttons("OxLEP-241")
-buttons("HEP-241")
-buttons("OxHEP-241")
-buttons("LEA-242")
-buttons("OxLEA-242")
-buttons("HEA-242")
-buttons("OxHEA-242")
-buttons("LECm-243")
-buttons("OxLECm-243")
-buttons("HECm-243")
-buttons("OxHECm-243")
-buttons("LECm-245")
-buttons("OxLECm-245")
-buttons("HECm-245")
-buttons("OxHECm-245")
-buttons("LECm-247")
-buttons("OxLECm-247")
-buttons("HECm-247")
-buttons("OxHECm-247")
-buttons("LEB-248")
-buttons("OxLEB-248")
-buttons("HEB-248")
-buttons("OxHEB-248")
-buttons("LECf-249")
-buttons("OxLECf-249")
-buttons("HECf-249")
-buttons("OxHECf-249")
-buttons("LECf-251")
-buttons("OxLECf-251")
-buttons("HECf-251")
-buttons("OxHECf-251")
+local function drawButton(btn)
+  gpu.setForeground(btn.foreground)
+  gpu.setBackground(btn.background)
+  gpu.fill(btn.x, btn.y, btn.width, btn.height, " ")
+  gpu.set(btn.x + 1, btn.y + math.floor(btn.height / 2), btn.text)
+end
+
+local function selectFuel(tbl)
+  local function getColor(fuel, color)
+    if fuel.oxide and not oxSide then
+      return 0xFF0000
+    end
+    return color == 0x000000 and 0x00FF00 or 0x000000
+  end
+  
+  local name = tbl.text
+  local fuel = fuels[name]
+  local ctg = fuel.category
+  local color = getColor(fuel, tbl.background)
+  if color == 0x00FF00 then
+    for k, v in pairs(fuel.elements) do
+      local se = selectedElements[k] or 1
+      se = se + 1
+      selectedElements[k] = se
+    end
+    local sf = selectedFuels[ctg] or {}
+    table.insert(sf, name)
+    selectedFuels[ctg] = sf
+  elseif color == 0x000000 then
+    for k, v in pairs(fuel.elements) do
+      local se = selectedElements[k] or 1
+      se = se - 1
+      selectedElements[k] = se > 0 and se or nil
+    end
+    local sf = selectedFuels[ctg]
+    if sf then
+      for i = 1, #sf do
+        if sf[i] == name then
+          table.remove(sf, i)
+        end
+      end
+    end
+  end
+  tbl.background = color
+  drawButton(tbl)
+--[[local n1 = next(fuel.elements)
+local n2 = next(fuel.elements, n1)
+gpu.set(1, 1, n1)
+gpu.set(1, 2, n2 or "")]]
+end
 
 local function init()
   modem.open(4)
@@ -208,19 +209,14 @@ local function init()
     return
   end
   
-  local foreground
-  local background
-  for k, v in pairs(buttons) do
-    if foreground ~= v.foreground then
-      foreground = v.foreground
-      gpu.setForeground(foreground)
+  for k, v in pairs(fuels) do
+    if k ~= "n" then
+      buttons(k, v.n, selectFuel)
     end
-    if background ~= v.background then
-      background = v.background
-      gpu.setBackground(background)
-    end
-    gpu.fill(v.x, v.y, v.width, v.height, " ")
-    gpu.set(v.x + 1, v.y + (math.ceil((v.height - 1) / 2)), v.text)
+  end
+  
+  for _, v in pairs(buttons) do
+    drawButton(v)
   end
 end
 
@@ -291,9 +287,18 @@ local function recraftElements()
   end
 end
 
-init()
-
-while true do
-  recraftElements()
-  os.sleep(1)
+local function main()
+  init()
+  while true do
+    local _, _, x, y = event.pull(10, "touch")
+    if x and y then
+      for k, v in pairs(buttons) do
+        if x >= v.x and x < v.x + v.width and y >= v.y and y < v.y + v.height then
+          v.func(v)
+        end
+      end
+    end
+  end
 end
+
+main()
